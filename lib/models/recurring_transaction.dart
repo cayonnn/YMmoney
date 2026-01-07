@@ -91,25 +91,71 @@ class RecurringTransaction extends HiveObject {
       return startDate;
     }
     
-    // Calculate next due date from lastGenerated
-    DateTime next = lastGenerated;
+    // For monthly/yearly, use the day from startDate to keep consistency
+    final targetDay = startDate.day;
     
-    while (next.isBefore(now) || next.isAtSameMomentAs(lastGenerated)) {
-      switch (frequency) {
-        case RecurrenceFrequency.daily:
+    // Calculate next due date based on frequency
+    DateTime next;
+    
+    switch (frequency) {
+      case RecurrenceFrequency.daily:
+        // For daily, simply find the next day after lastGenerated that's >= today
+        next = lastGenerated.add(const Duration(days: 1));
+        while (next.isBefore(todayStart)) {
           next = next.add(const Duration(days: 1));
-          break;
-        case RecurrenceFrequency.weekly:
+        }
+        break;
+        
+      case RecurrenceFrequency.weekly:
+        // For weekly, add 7 days from lastGenerated until >= today
+        next = lastGenerated.add(const Duration(days: 7));
+        while (next.isBefore(todayStart)) {
           next = next.add(const Duration(days: 7));
-          break;
-        case RecurrenceFrequency.monthly:
-          next = DateTime(next.year, next.month + 1, next.day);
-          break;
-        case RecurrenceFrequency.yearly:
-          next = DateTime(next.year + 1, next.month, next.day);
-          break;
-      }
+        }
+        break;
+        
+      case RecurrenceFrequency.monthly:
+        // For monthly, use the original startDate.day
+        int nextMonth = lastGenerated.month + 1;
+        int nextYear = lastGenerated.year;
+        if (nextMonth > 12) {
+          nextMonth = 1;
+          nextYear++;
+        }
+        // Handle months with fewer days (e.g., Feb 30 -> Feb 28)
+        int daysInMonth = DateTime(nextYear, nextMonth + 1, 0).day;
+        int actualDay = targetDay > daysInMonth ? daysInMonth : targetDay;
+        next = DateTime(nextYear, nextMonth, actualDay);
+        
+        while (next.isBefore(todayStart)) {
+          nextMonth++;
+          if (nextMonth > 12) {
+            nextMonth = 1;
+            nextYear++;
+          }
+          daysInMonth = DateTime(nextYear, nextMonth + 1, 0).day;
+          actualDay = targetDay > daysInMonth ? daysInMonth : targetDay;
+          next = DateTime(nextYear, nextMonth, actualDay);
+        }
+        break;
+        
+      case RecurrenceFrequency.yearly:
+        // For yearly, use the original startDate's month and day
+        int nextYear = lastGenerated.year + 1;
+        // Handle leap year for Feb 29
+        int daysInMonth = DateTime(nextYear, startDate.month + 1, 0).day;
+        int actualDay = targetDay > daysInMonth ? daysInMonth : targetDay;
+        next = DateTime(nextYear, startDate.month, actualDay);
+        
+        while (next.isBefore(todayStart)) {
+          nextYear++;
+          daysInMonth = DateTime(nextYear, startDate.month + 1, 0).day;
+          actualDay = targetDay > daysInMonth ? daysInMonth : targetDay;
+          next = DateTime(nextYear, startDate.month, actualDay);
+        }
+        break;
     }
+    
     return next;
   }
 

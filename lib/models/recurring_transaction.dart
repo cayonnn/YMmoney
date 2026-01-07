@@ -91,43 +91,45 @@ class RecurringTransaction extends HiveObject {
       return startDate;
     }
     
-    // For monthly/yearly, use the day from startDate to keep consistency
-    final targetDay = startDate.day;
+    // If startDate is today, return startDate (it's the first due date)
+    if (startDateOnly.isAtSameMomentAs(todayStart)) {
+      return startDate;
+    }
     
-    // Calculate next due date based on frequency
+    // startDate is in the past, calculate next occurrence
     DateTime next;
     
     switch (frequency) {
       case RecurrenceFrequency.daily:
-        // For daily, simply find the next day after lastGenerated that's >= today
-        next = lastGenerated.add(const Duration(days: 1));
-        while (next.isBefore(todayStart)) {
+        // For daily, find next day >= today
+        next = startDateOnly;
+        while (next.isBefore(todayStart) || next.isAtSameMomentAs(lastGenerated)) {
           next = next.add(const Duration(days: 1));
         }
         break;
         
       case RecurrenceFrequency.weekly:
-        // For weekly, add 7 days from lastGenerated until >= today
-        next = lastGenerated.add(const Duration(days: 7));
-        while (next.isBefore(todayStart)) {
+        // For weekly, find next week >= today
+        next = startDateOnly;
+        while (next.isBefore(todayStart) || next.isAtSameMomentAs(lastGenerated)) {
           next = next.add(const Duration(days: 7));
         }
         break;
         
       case RecurrenceFrequency.monthly:
         // For monthly, use the original startDate.day
-        int nextMonth = lastGenerated.month + 1;
-        int nextYear = lastGenerated.year;
-        if (nextMonth > 12) {
-          nextMonth = 1;
-          nextYear++;
-        }
-        // Handle months with fewer days (e.g., Feb 30 -> Feb 28)
+        final targetDay = startDate.day;
+        int nextMonth = startDate.month;
+        int nextYear = startDate.year;
+        
+        // Start from startDate and find the first occurrence >= today and > lastGenerated
         int daysInMonth = DateTime(nextYear, nextMonth + 1, 0).day;
         int actualDay = targetDay > daysInMonth ? daysInMonth : targetDay;
         next = DateTime(nextYear, nextMonth, actualDay);
         
-        while (next.isBefore(todayStart)) {
+        final lastGeneratedOnly = DateTime(lastGenerated.year, lastGenerated.month, lastGenerated.day);
+        
+        while (next.isBefore(todayStart) || !next.isAfter(lastGeneratedOnly)) {
           nextMonth++;
           if (nextMonth > 12) {
             nextMonth = 1;
@@ -141,13 +143,16 @@ class RecurringTransaction extends HiveObject {
         
       case RecurrenceFrequency.yearly:
         // For yearly, use the original startDate's month and day
-        int nextYear = lastGenerated.year + 1;
-        // Handle leap year for Feb 29
+        final targetDay = startDate.day;
+        int nextYear = startDate.year;
+        
         int daysInMonth = DateTime(nextYear, startDate.month + 1, 0).day;
         int actualDay = targetDay > daysInMonth ? daysInMonth : targetDay;
         next = DateTime(nextYear, startDate.month, actualDay);
         
-        while (next.isBefore(todayStart)) {
+        final lastGeneratedOnly = DateTime(lastGenerated.year, lastGenerated.month, lastGenerated.day);
+        
+        while (next.isBefore(todayStart) || !next.isAfter(lastGeneratedOnly)) {
           nextYear++;
           daysInMonth = DateTime(nextYear, startDate.month + 1, 0).day;
           actualDay = targetDay > daysInMonth ? daysInMonth : targetDay;
